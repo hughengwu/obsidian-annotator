@@ -1,5 +1,5 @@
 import { getAnnotation } from 'annotationFileUtils';
-import { ANNOTATION_TARGET_PROPERTY, ANNOTATION_TARGET_TYPE_PROPERTY, VIEW_TYPE_PDF_ANNOTATOR } from './constants';
+import { ANNOTATION_TARGET_PROPERTY, ANNOTATION_TARGET_TYPE_PROPERTY, ANNOTATION_LAST_POSITION_PROPERTY, VIEW_TYPE_PDF_ANNOTATOR } from './constants';
 import { DarkReaderType } from 'darkreader';
 import AnnotatorPlugin from 'main';
 import { Annotation } from './types';
@@ -13,6 +13,7 @@ export default class AnnotatorView extends FileView {
     iframe: HTMLIFrameElement;
     activeG: () => void;
     annotationTarget?: string;
+    currentFile?: TFile;
     darkReaderReferences: Set<WeakRef<DarkReaderType>>;
     useDarkMode: boolean;
     getViewType(): string {
@@ -74,6 +75,10 @@ export default class AnnotatorView extends FileView {
             this.contentEl.removeClass('view-content');
             this.contentEl.style.height = '100%';
             this.annotationTarget = annotationTarget;
+            this.currentFile = file;
+
+            // 获取上次阅读位置
+            const lastPosition = this.plugin.getLastPosition(file);
             if (annotationTarget) {
                 const annotationTargetType =
                     this.plugin.getPropertyValue(ANNOTATION_TARGET_TYPE_PROPERTY, file) ||
@@ -86,6 +91,7 @@ export default class AnnotatorView extends FileView {
                                 pdf={annotationTarget}
                                 containerEl={this.contentEl}
                                 annotationFile={file.path}
+                                lastPosition={lastPosition}
                                 onload={async iframe => {
                                     this.iframe = iframe;
                                 }}
@@ -99,6 +105,7 @@ export default class AnnotatorView extends FileView {
                                 epub={annotationTarget}
                                 containerEl={this.contentEl}
                                 annotationFile={file.path}
+                                lastPosition={lastPosition}
                                 onload={async iframe => {
                                     this.iframe = iframe;
                                 }}

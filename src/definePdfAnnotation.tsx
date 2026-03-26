@@ -1,13 +1,13 @@
 import defineGenericAnnotation from 'defineGenericAnnotation';
 import React from 'react';
-import { Vault } from 'obsidian';
+import { Vault, TFile } from 'obsidian';
 import AnnotatorPlugin from 'main';
 import { wait } from 'utils';
 import { PdfAnnotationProps } from './types';
 
 export default (vault: Vault, plugin: AnnotatorPlugin) => {
     const GenericAnnotationPdf = defineGenericAnnotation(vault, plugin);
-    const PdfAnnotation = ({ onload, ...props }: PdfAnnotationProps) => {
+    const PdfAnnotation = ({ lastPosition, onload, ...props }: PdfAnnotationProps) => {
         return (
             <GenericAnnotationPdf
                 baseSrc="https://via.hypothes.is/https.html"
@@ -25,6 +25,68 @@ export default (vault: Vault, plugin: AnnotatorPlugin) => {
 
                     const document = pdfJsFrame.contentDocument;
                     const { PDFViewerApplication } = pdfJsFrame.contentWindow;
+
+                    // 等待 PDF 加载完成
+                    const pdfViewer = PDFViewerApplication.pdfViewer;
+
+                    // 如果有上次阅读位置，跳转到该页
+                    if (lastPosition) {
+                        const pageNumber = parseInt(lastPosition, 10);
+                        if (!isNaN(pageNumber) && pageNumber > 0) {
+                            // 等待 PDF 加载完成后再跳转
+                            const checkAndJump = () => {
+                                if (pdfViewer.pagesCount > 0) {
+                                    PDFViewerApplication.page = pageNumber;
+                                    return true;
+                                }
+                                return false;
+                            };
+
+                            if (!checkAndJump()) {
+                                const interval = setInterval(() => {
+                                    if (checkAndJump()) {
+                                        clearInterval(interval);
+                                    }
+                                }, 500);
+                                // 最多等待 30 秒
+                                setTimeout(() => clearInterval(interval), 30000);
+                            }
+                        }
+                    }
+
+                    // 设置定期保存阅读位置
+                    let currentPage = PDFViewerApplication.page;
+                    const savePosition = () => {
+                        const newPage = PDFViewerApplication.page;
+                        if (newPage !== currentPage) {
+                            currentPage = newPage;
+                            const file = plugin.app.vault.getAbstractFileByPath(props.annotationFile);
+                            if (file instanceof TFile) {
+                                plugin.saveLastPosition(file, String(currentPage));
+                            }
+                        }
+                    };
+
+                    // 每 30 秒保存一次
+                    const saveInterval = setInterval(savePosition, 30000);
+
+                    // 页面变化时保存
+                    pdfViewer.eventBus.on('pagechanging', (e: { pageNumber: number }) => {
+                        if (e.pageNumber !== currentPage) {
+                            currentPage = e.pageNumber;
+                            const file = plugin.app.vault.getAbstractFileByPath(props.annotationFile);
+                            if (file instanceof TFile) {
+                                plugin.saveLastPosition(file, String(currentPage));
+                            }
+                        }
+                    });
+
+                    // 清理
+                    const originalOnUnload = iframe.contentWindow.onbeforeunload;
+                    iframe.contentWindow.onbeforeunload = () => {
+                        clearInterval(saveInterval);
+                        if (originalOnUnload) originalOnUnload();
+                    };
 
                     let startX = 0,
                         startY = 0;

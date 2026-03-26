@@ -19,7 +19,7 @@ import { getAPI as getDataviewApi } from 'obsidian-dataview';
 import definePdfAnnotation from './definePdfAnnotation';
 import { around } from 'monkey-around';
 
-import { VIEW_TYPE_PDF_ANNOTATOR, ICON_NAME, ANNOTATION_TARGET_PROPERTY } from './constants';
+import { ANNOTATION_TARGET_PROPERTY, ANNOTATION_TARGET_TYPE_PROPERTY, ANNOTATION_LAST_POSITION_PROPERTY, VIEW_TYPE_PDF_ANNOTATOR } from './constants';
 import defineEpubAnnotation from './defineEpubAnnotation';
 import defineVideoAnnotation from './defineVideoAnnotation';
 import { Annotation, PdfAnnotationProps, EpubAnnotationProps, VideoAnnotationProps, WebAnnotationProps } from './types';
@@ -380,6 +380,54 @@ export default class AnnotatorPlugin extends Plugin implements IHasAnnotatorSett
 
     isAnnotationFile(f: TFile | null): boolean {
         return !(this.getPropertyValue(ANNOTATION_TARGET_PROPERTY, f) == null);
+    }
+
+    /**
+     * 获取文件的当前阅读位置
+     */
+    public getLastPosition(file: TFile | null): string | null {
+        return this.getPropertyValue(ANNOTATION_LAST_POSITION_PROPERTY, file);
+    }
+
+    /**
+     * 保存阅读位置到 frontmatter
+     */
+    public async saveLastPosition(file: TFile, position: string): Promise<void> {
+        const currentPosition = this.getLastPosition(file);
+        if (currentPosition === position) return;
+
+        const cache = this.app.metadataCache.getFileCache(file);
+        const content = await this.app.vault.read(file);
+
+        // 检查文件是否有 frontmatter
+        if (cache?.frontmatter) {
+            // 使用正则表达式替换 frontmatter 中的值
+            const frontmatterEnd = content.indexOf('---', 3);
+            if (frontmatterEnd !== -1) {
+                const frontmatter = content.substring(0, frontmatterEnd + 3);
+                const rest = content.substring(frontmatterEnd + 3);
+
+                // 检查是否已存在该属性
+                const propertyRegex = new RegExp(`^${ANNOTATION_LAST_POSITION_PROPERTY}:.*$`, 'm');
+                let newFrontmatter: string;
+
+                if (propertyRegex.test(frontmatter)) {
+                    // 替换现有值
+                    newFrontmatter = frontmatter.replace(
+                        propertyRegex,
+                        `${ANNOTATION_LAST_POSITION_PROPERTY}: "${position}"`
+                    );
+                } else {
+                    // 添加新属性
+                    newFrontmatter = frontmatter.replace(
+                        /^(---\n)/m,
+                        `---\n${ANNOTATION_LAST_POSITION_PROPERTY}: "${position}"\n`
+                    );
+                }
+
+                await this.app.vault.modify(file, newFrontmatter + rest);
+            }
+        }
     }
 
     private addMarkdownPostProcessor() {
