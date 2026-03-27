@@ -11,10 +11,12 @@ const makeAnnotationBlockRegex = (annotationId?: string) =>
     );
 
 const getAnnotationFromAnnotationBlock = (annotationBlock: string, annotationId: string): Annotation => {
+    if (!annotationBlock) return null;
+
     const contentRegex = makeAnnotationContentRegex();
     const content = annotationBlock
         .split('\n')
-        .map(x => x.substr(1))
+        .map(x => x?.substr(1) ?? '')
         .join('\n');
 
     const match = contentRegex.exec(content);
@@ -22,9 +24,15 @@ const getAnnotationFromAnnotationBlock = (annotationBlock: string, annotationId:
         return null;
     }
 
-    const {
-        groups: { annotationJson, prefix, highlight, postfix, comment, tags }
-    } = match;
+    const groups = match.groups;
+    const annotationJson = groups.annotationJson;
+    if (!annotationJson) return null;
+
+    const prefix = groups.prefix;
+    const highlight = groups.highlight;
+    const postfix = groups.postfix;
+    const comment = groups.comment;
+    const tags = groups.tags;
     const annotation = JSON.parse(annotationJson);
     const annotationTarget = annotation.target?.[0];
     if (annotationTarget && 'selector' in annotationTarget) {
@@ -36,7 +44,7 @@ const getAnnotationFromAnnotationBlock = (annotationBlock: string, annotationId:
     }
     annotation.text = comment;
     annotation.tags = tags
-        ? tags.split(',').map(x => x.trim().substr(1)).filter(x => x)
+        ? tags.split(',').map(x => x?.trim()?.substr(1)).filter(x => x)
         : [];
     if ('group' in annotation) {
         delete annotation.group;
@@ -100,10 +108,10 @@ const makeAnnotationString = (annotation: Annotation, plugin: IHasAnnotatorSetti
         '\n' +
         annotationString
             .split('\n')
-            .map(x => `>${x}`)
+            .map(x => x ? `>${x}` : '>')
             .join('\n') +
         '\n^' +
-        annotation.id +
+        (annotation.id || '') +
         '\n'
     );
 };
@@ -116,10 +124,11 @@ export function getAnnotationFromFileContent(annotationId: string, fileContent: 
         if (m.index === annotationRegex.lastIndex) {
             annotationRegex.lastIndex++;
         }
-        const {
-            groups: { annotationBlock, annotationId }
-        } = m;
-        return getAnnotationFromAnnotationBlock(annotationBlock, annotationId);
+        if (!m.groups) return null;
+        const annotationBlock = m.groups.annotationBlock;
+        const annotationIdFromMatch = m.groups.annotationId;
+        if (!annotationBlock || !annotationIdFromMatch) return null;
+        return getAnnotationFromAnnotationBlock(annotationBlock, annotationIdFromMatch);
     } else {
         return null;
     }
@@ -191,10 +200,12 @@ export function loadAnnotationsAtUriFromFileText(url: URL | null, fileText: stri
             if (m.index === annotationRegex.lastIndex) {
                 annotationRegex.lastIndex++;
             }
-            const {
-                groups: { annotationBlock, annotationId }
-            } = m;
-            const completeAnnotation = getAnnotationFromAnnotationBlock(annotationBlock, annotationId);
+            if (!m.groups) continue;
+            const annotationBlock = m.groups.annotationBlock;
+            const annotationIdFromMatch = m.groups.annotationId;
+            if (!annotationBlock || !annotationIdFromMatch) continue;
+            const completeAnnotation = getAnnotationFromAnnotationBlock(annotationBlock, annotationIdFromMatch);
+            if (!completeAnnotation) continue;
             const annotationDocumentIdentifiers = [
                 completeAnnotation.document?.documentFingerprint,
                 completeAnnotation.uri

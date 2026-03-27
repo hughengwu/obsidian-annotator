@@ -46,6 +46,7 @@ export function get_url_extension(url) {
 }
 
 export function isUrl(potentialUrl: string) {
+    if (!potentialUrl || typeof potentialUrl !== 'string') return false;
     try {
         new URL(potentialUrl);
         return true;

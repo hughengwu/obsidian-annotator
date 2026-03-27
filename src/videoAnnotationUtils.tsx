@@ -15,10 +15,10 @@ const makeVideoAnnotationString = (annotation: VideoAnnotation) => {
         '\n' +
         annotationString
             .split('\n')
-            .map(x => `>${x}`)
+            .map(x => x ? `>${x}` : '>')
             .join('\n') +
         '\n^' +
-        annotation._id +
+        (annotation._id || '') +
         '\n'
     );
 };
@@ -34,20 +34,22 @@ export function getVideoAnnotationFromFileContent(annotationId: string, fileCont
         if (!m.groups) {
             return null;
         }
-        const {
-            groups: { annotationId, time, title, content }
-        } = m;
+        const groups = m.groups;
+        const annotationIdFromMatch = groups.annotationId;
+        const time = groups.time;
+        const title = groups.title;
+        const content = groups.content;
         return {
             readwiseId: '',
             content: content
                 ? content.trim()
                     .split('\n')
-                    .map(x => x.substr(1))
+                    .map(x => x?.substr(1) ?? '')
                     .join('\n')
                 : '',
             title: title || '',
             tags: [],
-            _id: annotationId,
+            _id: annotationIdFromMatch,
             video: '620d5a42b9ab630009bf3e31',
             start: Number(time ? time.trim() : 0),
             user: 'obsidianuser',
@@ -102,20 +104,22 @@ export function loadVideoAnnotationsAtUriFromFileText(url: URL | null, fileText:
             if (!m.groups) {
                 continue;
             }
-            const {
-                groups: { annotationId, time, title, content }
-            } = m;
+            const groups = m.groups;
+            const annotationIdFromMatch = groups.annotationId;
+            const time = groups.time;
+            const title = groups.title;
+            const content = groups.content;
             const completeVideoAnnotation = {
                 readwiseId: '',
                 content: content
                     ? content.trim()
                         .split('\n')
-                        .map(x => x.substr(1))
+                        .map(x => x?.substr(1) ?? '')
                         .join('\n')
                     : '',
                 title: title || '',
                 tags: [],
-                _id: annotationId,
+                _id: annotationIdFromMatch,
                 video: '620d5a42b9ab630009bf3e31',
                 start: Number(time ? time.trim() : 0),
                 user: 'obsidianuser',

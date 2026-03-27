@@ -41,6 +41,8 @@ export default class AnnotatorView extends FileView {
                 target = target[0];
             }
 
+            if (!target) continue;
+
             if (isUrl(target)) {
                 return target;
             }
