@@ -1,6 +1,6 @@
 import * as genericAnnotation from 'defineGenericAnnotation';
 import React from 'react';
-import { Vault } from 'obsidian';
+import { Vault, TFile } from 'obsidian';
 import AnnotatorPlugin from 'main';
 
 import { AnnotatorSettings } from 'settings';
@@ -12,7 +12,7 @@ import { PackagingMetadataObject } from 'epubjs/types/packaging';
 import Navigation from 'epubjs/types/navigation';
 
 import { wait } from 'utils';
-import { ANNOTATION_LAST_POSITION_PROPERTY } from './constants';
+import { ANNOTATION_LAST_POSITION_PROPERTY, SAMPLE_EPUB_URL } from './constants';
 
 export default (vault: Vault, plugin: AnnotatorPlugin) => {
     const GenericAnnotationEpub = genericAnnotation.default(vault, plugin);
@@ -122,7 +122,7 @@ class EpubReader {
     setupPositionSaving(book: epubjs.Book) {
         // 每 30 秒保存一次位置
         this.savePositionInterval = window.setInterval(() => {
-            const currentLocation = book.rendition.currentLocation();
+            const currentLocation = book.rendition.currentLocation() as unknown as { start?: { href?: string } };
             if (currentLocation?.start?.href) {
                 const position = currentLocation.start.href;
                 if (position !== this.currentPosition) {
@@ -136,8 +136,9 @@ class EpubReader {
         }, 30000);
 
         // 页面切换时也保存位置
-        book.rendition.on('relocated', (location: { start: { href: string } }) => {
-            const position = location?.start?.href;
+        book.rendition.on('relocated', (location: unknown) => {
+            const loc = location as { start?: { href?: string } };
+            const position = loc?.start?.href;
             if (position && position !== this.currentPosition) {
                 this.currentPosition = position;
                 const file = this.plugin.app.vault.getAbstractFileByPath(this.annotationFile);

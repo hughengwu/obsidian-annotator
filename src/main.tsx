@@ -19,7 +19,7 @@ import { getAPI as getDataviewApi } from 'obsidian-dataview';
 import definePdfAnnotation from './definePdfAnnotation';
 import { around } from 'monkey-around';
 
-import { ANNOTATION_TARGET_PROPERTY, ANNOTATION_TARGET_TYPE_PROPERTY, ANNOTATION_LAST_POSITION_PROPERTY, VIEW_TYPE_PDF_ANNOTATOR } from './constants';
+import { ANNOTATION_TARGET_PROPERTY, ANNOTATION_TARGET_TYPE_PROPERTY, ANNOTATION_LAST_POSITION_PROPERTY, VIEW_TYPE_PDF_ANNOTATOR, ICON_NAME } from './constants';
 import defineEpubAnnotation from './defineEpubAnnotation';
 import defineVideoAnnotation from './defineVideoAnnotation';
 import { Annotation, PdfAnnotationProps, EpubAnnotationProps, VideoAnnotationProps, WebAnnotationProps } from './types';
