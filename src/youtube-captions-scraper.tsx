@@ -38,6 +38,9 @@ export async function getSubtitles(
     if (!subtitle || (subtitle && !subtitle.baseUrl)) throw new Error(`Could not find ${lang} captions for ${videoID}`);
 
     const transcript = await (await fetch(subtitle.baseUrl)).text();
+    if (!transcript) {
+        return [];
+    }
     const lines = transcript
         .replace('<?xml version="1.0" encoding="utf-8" ?><transcript>', '')
         .replace('</transcript>', '')

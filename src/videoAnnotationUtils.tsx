@@ -9,7 +9,7 @@ const makeVideoAnnotationBlockRegex = (annotationId?: string) =>
     );
 
 const makeVideoAnnotationString = (annotation: VideoAnnotation) => {
-    const annotationString = ` **${annotation.title}** %%TIMESTAMP: ${annotation.start}%%\n${annotation.content}`;
+    const annotationString = ` **${annotation.title || ''}** %%TIMESTAMP: ${annotation.start || 0}%%\n${annotation.content || ''}`;
 
     return (
         '\n' +
@@ -31,21 +31,25 @@ export function getVideoAnnotationFromFileContent(annotationId: string, fileCont
         if (m.index === annotationRegex.lastIndex) {
             annotationRegex.lastIndex++;
         }
+        if (!m.groups) {
+            return null;
+        }
         const {
             groups: { annotationId, time, title, content }
         } = m;
         return {
             readwiseId: '',
             content: content
-                .trim()
-                .split('\n')
-                .map(x => x.substr(1))
-                .join('\n'),
-            title,
+                ? content.trim()
+                    .split('\n')
+                    .map(x => x.substr(1))
+                    .join('\n')
+                : '',
+            title: title || '',
             tags: [],
             _id: annotationId,
             video: '620d5a42b9ab630009bf3e31',
-            start: Number(time.trim()),
+            start: Number(time ? time.trim() : 0),
             user: 'obsidianuser',
             updatedAt: JSON.parse(JSON.stringify(new Date())),
             createdAt: JSON.parse(JSON.stringify(new Date())),
@@ -95,21 +99,25 @@ export function loadVideoAnnotationsAtUriFromFileText(url: URL | null, fileText:
             if (m.index === annotationRegex.lastIndex) {
                 annotationRegex.lastIndex++;
             }
+            if (!m.groups) {
+                continue;
+            }
             const {
                 groups: { annotationId, time, title, content }
             } = m;
             const completeVideoAnnotation = {
                 readwiseId: '',
                 content: content
-                    .trim()
-                    .split('\n')
-                    .map(x => x.substr(1))
-                    .join('\n'),
-                title,
+                    ? content.trim()
+                        .split('\n')
+                        .map(x => x.substr(1))
+                        .join('\n')
+                    : '',
+                title: title || '',
                 tags: [],
                 _id: annotationId,
                 video: '620d5a42b9ab630009bf3e31',
-                start: Number(time.trim()),
+                start: Number(time ? time.trim() : 0),
                 user: 'obsidianuser',
                 updatedAt: JSON.parse(JSON.stringify(new Date())),
                 createdAt: JSON.parse(JSON.stringify(new Date())),

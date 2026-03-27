@@ -17,9 +17,14 @@ const getAnnotationFromAnnotationBlock = (annotationBlock: string, annotationId:
         .map(x => x.substr(1))
         .join('\n');
 
+    const match = contentRegex.exec(content);
+    if (!match || !match.groups) {
+        return null;
+    }
+
     const {
         groups: { annotationJson, prefix, highlight, postfix, comment, tags }
-    } = contentRegex.exec(content);
+    } = match;
     const annotation = JSON.parse(annotationJson);
     const annotationTarget = annotation.target?.[0];
     if (annotationTarget && 'selector' in annotationTarget) {
@@ -31,9 +36,8 @@ const getAnnotationFromAnnotationBlock = (annotationBlock: string, annotationId:
     }
     annotation.text = comment;
     annotation.tags = tags
-        .split(',')
-        .map(x => x.trim().substr(1))
-        .filter(x => x);
+        ? tags.split(',').map(x => x.trim().substr(1)).filter(x => x)
+        : [];
     if ('group' in annotation) {
         delete annotation.group;
     }
