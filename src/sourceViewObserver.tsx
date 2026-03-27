@@ -135,7 +135,7 @@ export default class SourceViewObserver {
 
         for (let i = 0; i < sourceLinks.length; i++) {
             const tempLink = linkHref[i];
-            if (typeof tempLink != 'string') continue;
+            if (typeof tempLink != 'string' || tempLink.length < 2) continue;
 
             // substring used remove [[ from internal link
             // because iOS doesn't support positive lookback regex
