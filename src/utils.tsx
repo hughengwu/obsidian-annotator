@@ -41,6 +41,7 @@ export async function fetchUrl(requestInfo: RequestInfo, requestInit?: RequestIn
 export const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 export function get_url_extension(url) {
+    if (!url) return '';
     return url.split(/[#?]/)[0].split('.').pop().trim();
 }
 

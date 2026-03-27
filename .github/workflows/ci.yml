@@ -5,22 +5,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository and submodules
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
       with:
         submodules: recursive
     - name: Lint
       run: |
-        npm i
+        npm i --legacy-peer-deps
         npm run lint -- --max-warnings 0
 
   betterer:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository and submodules
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
       with:
         submodules: recursive
     - name: Check if code became worse
       run: |
-        npm i
+        npm i --legacy-peer-deps
         npm run betterer ci
