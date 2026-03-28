@@ -302,8 +302,8 @@ export default (vault: Vault, plugin: AnnotatorPlugin) => {
                             buf = await new Promise(res => {
                                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                 (window as any).app.vault.adapter.fs.readFile(
-                                    (x => (x.contains(':/') ? x.substr(1) : x))(
-                                        decodeURI(url.pathname).replaceAll('\\', '/')
+                                    (x => (x && x.contains(':/') ? x.substr(1) : x))(
+                                        decodeURI(url.pathname || '').replaceAll('\\', '/')
                                     ),
                                     (_, buf) => {
                                         res(buf);
@@ -330,7 +330,7 @@ export default (vault: Vault, plugin: AnnotatorPlugin) => {
                     const folder = resourcesZip;
                     if (proxiedHosts.has(url.host)) {
                         try {
-                            const pathName = `${url.host}${url.pathname}`.replace(/^\//, '');
+                            const pathName = `${url.host}${url.pathname || ''}`.replace(/^\//, '');
                             const file =
                                 folder.file(pathName) ||
                                 folder.file(`${pathName}.html`) ||
