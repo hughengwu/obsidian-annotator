@@ -1,5 +1,5 @@
 import { getAnnotation } from 'annotationFileUtils';
-import { ANNOTATION_TARGET_PROPERTY, ANNOTATION_TARGET_TYPE_PROPERTY, ANNOTATION_LAST_POSITION_PROPERTY, VIEW_TYPE_PDF_ANNOTATOR } from './constants';
+import { ANNOTATION_TARGET_PROPERTY, ANNOTATION_TARGET_TYPE_PROPERTY, VIEW_TYPE_PDF_ANNOTATOR } from './constants';
 import { DarkReaderType } from 'darkreader';
 import AnnotatorPlugin from 'main';
 import { Annotation } from './types';

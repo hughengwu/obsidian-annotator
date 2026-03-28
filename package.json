@@ -19,9 +19,7 @@
   "author": "",
   "license": "MIT",
   "browserslist": [
-    "electron >= 18",
-    "android >= 5",
-    "ios >= 12.1"
+    "electron >= 18"
   ],
   "devDependencies": {
     "@betterer/cli": "^5.3.6",

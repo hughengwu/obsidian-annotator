@@ -12,7 +12,7 @@ import { PackagingMetadataObject } from 'epubjs/types/packaging';
 import Navigation from 'epubjs/types/navigation';
 
 import { wait } from 'utils';
-import { ANNOTATION_LAST_POSITION_PROPERTY, SAMPLE_EPUB_URL } from './constants';
+import { SAMPLE_EPUB_URL } from './constants';
 
 export default (vault: Vault, plugin: AnnotatorPlugin) => {
     const GenericAnnotationEpub = genericAnnotation.default(vault, plugin);
