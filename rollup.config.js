@@ -63,6 +63,7 @@ export default {
     nodeResolve({browser: true}),
     replace({
       'process.env.NODE_ENV': JSON.stringify('production'),
+      'process.versions.node': JSON.stringify('18.0.0'),
       preventAssignment: true
     }),
     commonjs(),

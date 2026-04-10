@@ -29,26 +29,21 @@ export default (vault: Vault, plugin: AnnotatorPlugin) => {
                         await wait(50);
                     }
 
-                    // 清理之前的 reader
+                    // 清理之前的 reader（含位置保存）
                     if (epubReader) {
-                        epubReader.cleanup();
+                        epubReader.cleanup(epubReader.book);
                     }
 
                     epubReader = new EpubReader(plugin.settings.epubSettings, plugin, props.annotationFile, lastPosition);
                     iframe.contentDocument.addEventListener('DOMContentLoaded', epubReader.start(iframe), false);
 
-                    // 组件卸载时清理
-                    const cleanup = () => {
-                        if (epubReader) {
-                            epubReader.cleanup();
-                            epubReader = null;
-                        }
-                    };
-
-                    // 监听 iframe 卸载
+                    // 监听 iframe 卸载，关闭前保存当前位置
                     const originalOnUnload = iframe.contentWindow.onbeforeunload;
                     iframe.contentWindow.onbeforeunload = () => {
-                        cleanup();
+                        if (epubReader) {
+                            epubReader.cleanup(epubReader.book);
+                            epubReader = null;
+                        }
                         if (originalOnUnload) originalOnUnload();
                     };
                 }}
@@ -79,6 +74,7 @@ class EpubReader {
     lastPosition?: string;
     currentPosition?: string;
     savePositionInterval?: number;
+    book?: epubjs.Book;
 
     constructor(
         epubSettings: AnnotatorSettings['epubSettings'],
@@ -102,6 +98,7 @@ class EpubReader {
         const iw: readerWindow | null = iframe.contentWindow;
 
         const book = this.initBook(id, iw);
+        this.book = book;
 
         this.configureNavigationEvents(book, id, this.settings.readingMode);
         this.addBookMetaToUI(book, iframe);
@@ -120,25 +117,7 @@ class EpubReader {
     }
 
     setupPositionSaving(book: epubjs.Book) {
-        // 每 30 秒保存一次位置
-        this.savePositionInterval = window.setInterval(() => {
-            const currentLocation = book.rendition.currentLocation() as unknown as { start?: { href?: string } };
-            if (currentLocation?.start?.href) {
-                const position = currentLocation.start.href;
-                if (position !== this.currentPosition) {
-                    this.currentPosition = position;
-                    const file = this.plugin.app.vault.getAbstractFileByPath(this.annotationFile);
-                    if (file instanceof TFile) {
-                        this.plugin.saveLastPosition(file, position);
-                    }
-                }
-            }
-        }, 30000);
-
-        // 页面切换时也保存位置
-        book.rendition.on('relocated', (location: unknown) => {
-            const loc = location as { start?: { href?: string } };
-            const position = loc?.start?.href;
+        const doSave = (position: string) => {
             if (position && position !== this.currentPosition) {
                 this.currentPosition = position;
                 const file = this.plugin.app.vault.getAbstractFileByPath(this.annotationFile);
@@ -146,12 +125,48 @@ class EpubReader {
                     this.plugin.saveLastPosition(file, position);
                 }
             }
+        };
+
+        // 页面切换时立即保存：优先用 CFI（精确到段落内位置），回退到 href（章节）
+        book.rendition.on('relocated', (location: unknown) => {
+            const loc = location as { start?: { cfi?: string; href?: string } };
+            const position = loc?.start?.cfi || loc?.start?.href;
+            doSave(position);
         });
+
+        // 每 30 秒兜底保存一次
+        this.savePositionInterval = window.setInterval(() => {
+            const currentLocation = book.rendition.currentLocation() as unknown as {
+                start?: { cfi?: string; href?: string };
+            };
+            const position = currentLocation?.start?.cfi || currentLocation?.start?.href;
+            doSave(position);
+        }, 30000);
     }
 
-    cleanup() {
+    saveCurrentPosition(book: epubjs.Book) {
+        try {
+            const loc = book.rendition.currentLocation() as unknown as {
+                start?: { cfi?: string; href?: string };
+            };
+            const position = loc?.start?.cfi || loc?.start?.href;
+            if (position) {
+                const file = this.plugin.app.vault.getAbstractFileByPath(this.annotationFile);
+                if (file instanceof TFile) {
+                    this.plugin.saveLastPosition(file, position);
+                }
+            }
+        } catch (e) {
+            // rendition 可能已销毁，忽略
+        }
+    }
+
+    cleanup(book?: epubjs.Book) {
         if (this.savePositionInterval) {
             clearInterval(this.savePositionInterval);
+        }
+        if (book) {
+            this.saveCurrentPosition(book);
         }
     }
 

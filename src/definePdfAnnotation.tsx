@@ -29,11 +29,38 @@ export default (vault: Vault, plugin: AnnotatorPlugin) => {
                     // 等待 PDF 加载完成
                     const pdfViewer = PDFViewerApplication.pdfViewer;
 
+                    // 用上次阅读页码初始化 currentPage，防止加载期间的 pagechanging(1) 覆盖已保存位置
+                    const targetPage = lastPosition ? (parseInt(lastPosition, 10) || 1) : 1;
+                    let currentPage = targetPage;
+
+                    const saveCurrentPage = () => {
+                        const file = plugin.app.vault.getAbstractFileByPath(props.annotationFile);
+                        if (file instanceof TFile) {
+                            plugin.saveLastPosition(file, String(currentPage));
+                        }
+                    };
+
+                    // 页面变化时立即保存
+                    pdfViewer.eventBus.on('pagechanging', (e: { pageNumber: number }) => {
+                        if (e.pageNumber !== currentPage) {
+                            currentPage = e.pageNumber;
+                            saveCurrentPage();
+                        }
+                    });
+
+                    // 每 30 秒保存一次（保障极端情况）
+                    const saveInterval = setInterval(() => {
+                        const newPage = PDFViewerApplication.page;
+                        if (newPage && newPage !== currentPage) {
+                            currentPage = newPage;
+                            saveCurrentPage();
+                        }
+                    }, 30000);
+
                     // 如果有上次阅读位置，跳转到该页
                     if (lastPosition) {
                         const pageNumber = parseInt(lastPosition, 10);
                         if (!isNaN(pageNumber) && pageNumber > 0) {
-                            // 等待 PDF 加载完成后再跳转
                             const checkAndJump = () => {
                                 if (pdfViewer.pagesCount > 0) {
                                     PDFViewerApplication.page = pageNumber;
@@ -48,43 +75,17 @@ export default (vault: Vault, plugin: AnnotatorPlugin) => {
                                         clearInterval(interval);
                                     }
                                 }, 500);
-                                // 最多等待 30 秒
                                 setTimeout(() => clearInterval(interval), 30000);
                             }
                         }
                     }
 
-                    // 设置定期保存阅读位置
-                    let currentPage = PDFViewerApplication.page;
-                    const savePosition = () => {
-                        const newPage = PDFViewerApplication.page;
-                        if (newPage !== currentPage) {
-                            currentPage = newPage;
-                            const file = plugin.app.vault.getAbstractFileByPath(props.annotationFile);
-                            if (file instanceof TFile) {
-                                plugin.saveLastPosition(file, String(currentPage));
-                            }
-                        }
-                    };
-
-                    // 每 30 秒保存一次
-                    const saveInterval = setInterval(savePosition, 30000);
-
-                    // 页面变化时保存
-                    pdfViewer.eventBus.on('pagechanging', (e: { pageNumber: number }) => {
-                        if (e.pageNumber !== currentPage) {
-                            currentPage = e.pageNumber;
-                            const file = plugin.app.vault.getAbstractFileByPath(props.annotationFile);
-                            if (file instanceof TFile) {
-                                plugin.saveLastPosition(file, String(currentPage));
-                            }
-                        }
-                    });
-
-                    // 清理
+                    // 关闭时保存当前位置，确保最新页码不丢失
                     const originalOnUnload = iframe.contentWindow.onbeforeunload;
                     iframe.contentWindow.onbeforeunload = () => {
                         clearInterval(saveInterval);
+                        currentPage = PDFViewerApplication.page || currentPage;
+                        saveCurrentPage();
                         if (originalOnUnload) originalOnUnload();
                     };
 

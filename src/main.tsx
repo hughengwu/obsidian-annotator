@@ -390,44 +390,15 @@ export default class AnnotatorPlugin extends Plugin implements IHasAnnotatorSett
     }
 
     /**
-     * 保存阅读位置到 frontmatter
+     * 保存阅读位置到 frontmatter（使用 Obsidian 官方原子接口，跨平台安全）
      */
     public async saveLastPosition(file: TFile, position: string): Promise<void> {
         const currentPosition = this.getLastPosition(file);
         if (currentPosition === position) return;
 
-        const cache = this.app.metadataCache.getFileCache(file);
-        const content = await this.app.vault.read(file);
-
-        // 检查文件是否有 frontmatter
-        if (cache?.frontmatter) {
-            // 使用正则表达式替换 frontmatter 中的值
-            const frontmatterEnd = content.indexOf('---', 3);
-            if (frontmatterEnd !== -1) {
-                const frontmatter = content.substring(0, frontmatterEnd + 3);
-                const rest = content.substring(frontmatterEnd + 3);
-
-                // 检查是否已存在该属性
-                const propertyRegex = new RegExp(`^${ANNOTATION_LAST_POSITION_PROPERTY}:.*$`, 'm');
-                let newFrontmatter: string;
-
-                if (propertyRegex.test(frontmatter)) {
-                    // 替换现有值
-                    newFrontmatter = frontmatter.replace(
-                        propertyRegex,
-                        `${ANNOTATION_LAST_POSITION_PROPERTY}: "${position}"`
-                    );
-                } else {
-                    // 添加新属性
-                    newFrontmatter = frontmatter.replace(
-                        /^(---\n)/m,
-                        `---\n${ANNOTATION_LAST_POSITION_PROPERTY}: "${position}"\n`
-                    );
-                }
-
-                await this.app.vault.modify(file, newFrontmatter + rest);
-            }
-        }
+        await this.app.fileManager.processFrontMatter(file, fm => {
+            fm[ANNOTATION_LAST_POSITION_PROPERTY] = position;
+        });
     }
 
     private addMarkdownPostProcessor() {
