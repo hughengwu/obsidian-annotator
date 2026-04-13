@@ -402,6 +402,7 @@ export default (vault: Vault, plugin: AnnotatorPlugin) => {
                     } catch (e) {
                         // DarkReader failed to load (common on iOS WKWebView); use no-op fallback so the view still renders
                         console.warn('Annotator: DarkReader failed to load (dark mode unavailable):', e);
+                        // eslint-disable-next-line @typescript-eslint/no-empty-function
                         (iframe.contentWindow as any).DarkReader = { enable: () => {}, disable: () => {}, setFetchMethod: () => {} };
                     }
                     /* eslint-enable @typescript-eslint/no-explicit-any */
