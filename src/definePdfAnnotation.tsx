@@ -81,13 +81,23 @@ export default (vault: Vault, plugin: AnnotatorPlugin) => {
                     }
 
                     // 关闭时保存当前位置，确保最新页码不丢失
-                    const originalOnUnload = iframe.contentWindow.onbeforeunload;
-                    iframe.contentWindow.onbeforeunload = () => {
+                    // beforeunload 在 iOS WKWebView 上不触发，需同时监听 pagehide 和 visibilitychange
+                    const saveOnExit = () => {
                         clearInterval(saveInterval);
                         currentPage = PDFViewerApplication.page || currentPage;
                         saveCurrentPage();
+                    };
+                    const originalOnUnload = iframe.contentWindow.onbeforeunload;
+                    iframe.contentWindow.onbeforeunload = () => {
+                        saveOnExit();
                         if (originalOnUnload) originalOnUnload();
                     };
+                    // iOS: pagehide fires when page is hidden/closed
+                    iframe.contentWindow.addEventListener('pagehide', saveOnExit);
+                    // iOS: visibilitychange fires when app switches to background
+                    document.addEventListener('visibilitychange', () => {
+                        if (document.hidden) saveOnExit();
+                    });
 
                     let startX = 0,
                         startY = 0;

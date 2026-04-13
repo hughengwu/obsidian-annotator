@@ -4,6 +4,7 @@
   "description": "This is a sample plugin for Obsidian (https://obsidian.md)",
   "main": "main.js",
   "scripts": {
+    "postinstall": "node scripts/patch-react-offline-iframe.js",
     "prettier-format": "prettier --config .prettierrc.js src/**/*.tsx --write",
     "lint": "eslint src --ext .ts,.tsx",
     "dev": "rollup --config rollup.config.js -w",

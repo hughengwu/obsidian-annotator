@@ -25,7 +25,9 @@ export default (vault: Vault, plugin: AnnotatorPlugin) => {
                 {...props}
                 onload={async iframe => {
                     await props.onload?.(iframe);
-                    while (iframe?.contentDocument?.body?.innerHTML == '') {
+                    // Wait for inner iframe content with a 30s timeout (prevents infinite hang on iOS)
+                    const maxWait = Date.now() + 30000;
+                    while (iframe?.contentDocument?.body?.innerHTML == '' && Date.now() < maxWait) {
                         await wait(50);
                     }
 
@@ -34,18 +36,28 @@ export default (vault: Vault, plugin: AnnotatorPlugin) => {
                         epubReader.cleanup(epubReader.book);
                     }
 
-                    epubReader = new EpubReader(plugin.settings.epubSettings, plugin, props.annotationFile, lastPosition);
-                    iframe.contentDocument.addEventListener('DOMContentLoaded', epubReader.start(iframe), false);
+                    epubReader = new EpubReader(plugin.settings.epubSettings, plugin, props.annotationFile, props.epub, lastPosition);
+                    epubReader.start(iframe);
 
                     // 监听 iframe 卸载，关闭前保存当前位置
-                    const originalOnUnload = iframe.contentWindow.onbeforeunload;
-                    iframe.contentWindow.onbeforeunload = () => {
+                    // beforeunload 在 iOS WKWebView 上不触发，需同时监听 pagehide 和 visibilitychange
+                    const saveOnExit = () => {
                         if (epubReader) {
                             epubReader.cleanup(epubReader.book);
                             epubReader = null;
                         }
+                    };
+                    const originalOnUnload = iframe.contentWindow.onbeforeunload;
+                    iframe.contentWindow.onbeforeunload = () => {
+                        saveOnExit();
                         if (originalOnUnload) originalOnUnload();
                     };
+                    // iOS: pagehide fires when page is hidden/closed
+                    iframe.contentWindow.addEventListener('pagehide', saveOnExit);
+                    // iOS: visibilitychange fires when app switches to background
+                    document.addEventListener('visibilitychange', () => {
+                        if (document.hidden) saveOnExit();
+                    });
                 }}
             />
         );
@@ -71,6 +83,7 @@ class EpubReader {
     };
     plugin: AnnotatorPlugin;
     annotationFile: string;
+    epubFile: string;
     lastPosition?: string;
     currentPosition?: string;
     savePositionInterval?: number;
@@ -80,12 +93,14 @@ class EpubReader {
         epubSettings: AnnotatorSettings['epubSettings'],
         plugin: AnnotatorPlugin,
         annotationFile: string,
+        epubFile: string,
         lastPosition?: string
     ) {
         this.bookUrl = SAMPLE_EPUB_URL;
         this.settings = epubSettings;
         this.plugin = plugin;
         this.annotationFile = annotationFile;
+        this.epubFile = epubFile;
         this.lastPosition = lastPosition;
     }
 
@@ -171,8 +186,48 @@ class EpubReader {
     }
 
     initBook(id: Document, iw: readerWindow): epubjs.Book {
+        // eslint-disable-next-line @typescript-eslint/no-this-alias
+        const self = this;
         const book = new epubjs.Book(this.bookUrl, {
-            requestMethod: async function (url) {
+            requestMethod: async function (url: string) {
+                // Primary: use iframe's patched fetch (works on desktop/Android)
+                try {
+                    const response = await iw.fetch(url);
+                    if (response && response.ok) {
+                        return await response.arrayBuffer();
+                    }
+                } catch (_) {
+                    // Fall through to iOS fallback
+                }
+                // iOS fallback: iw.fetch may not be patched in WKWebView.
+                // Try to read epub directly from vault using known vault path.
+                try {
+                    // Handle vault: protocol (URL before getProxiedUrl conversion)
+                    const urlObj = new URL(url);
+                    if (urlObj.protocol === 'vault:') {
+                        const vaultPath = decodeURIComponent(urlObj.pathname.replace(/^\//, ''));
+                        const file = self.plugin.app.vault.getAbstractFileByPath(vaultPath);
+                        if (file instanceof TFile) {
+                            return await self.plugin.app.vault.readBinary(file);
+                        }
+                    }
+                } catch (_) {
+                    // ignore
+                }
+                // If the epub URL passed to requestMethod is the resource URL (app:// etc.),
+                // fall back to reading the epub directly by its vault path.
+                try {
+                    const epubVaultPath = self.epubFile;
+                    if (epubVaultPath && !epubVaultPath.startsWith('http')) {
+                        const file = self.plugin.app.vault.getAbstractFileByPath(epubVaultPath);
+                        if (file instanceof TFile) {
+                            return await self.plugin.app.vault.readBinary(file);
+                        }
+                    }
+                } catch (_) {
+                    // ignore
+                }
+                // Last resort: native fetch
                 return await (await iw.fetch(url)).arrayBuffer();
             },
             canonical: function (path) {

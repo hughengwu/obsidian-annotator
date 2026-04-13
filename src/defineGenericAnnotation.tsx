@@ -7,7 +7,7 @@ import { deleteAnnotation, loadAnnotations, writeAnnotation } from 'annotationFi
 import { Annotation } from './types';
 import AnnotatorPlugin from 'main';
 import { checkPseudoAnnotationEquality, getAnnotationHighlightTextData } from 'annotationUtils';
-import { MarkdownRenderer, normalizePath, TFile, TAbstractFile, Vault } from 'obsidian';
+import { MarkdownRenderer, normalizePath, TFile, TAbstractFile, Vault, Platform } from 'obsidian';
 import { DarkReaderType } from 'darkreader';
 import { getSubtitles } from 'youtube-captions-scraper';
 import getYouTubeMetaData from 'youtube-metadata-scraper';
@@ -298,26 +298,34 @@ export default (vault: Vault, plugin: AnnotatorPlugin) => {
                         }
                     }
                     if (url.protocol == 'file:') {
-                        try {
-                            buf = await new Promise(res => {
-                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                (window as any).app.vault.adapter.fs.readFile(
-                                    (x => (x && x.contains(':/') ? x.substr(1) : x))(
-                                        decodeURI(url.pathname || '').replaceAll('\\', '/')
-                                    ),
-                                    (_, buf) => {
-                                        res(buf);
-                                    }
-                                );
-                            });
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        const nodeFs = (window as any).app?.vault?.adapter?.fs;
+                        if (nodeFs?.readFile) {
+                            // Desktop only: Node.js fs adapter
+                            try {
+                                buf = await new Promise(res => {
+                                    nodeFs.readFile(
+                                        (x => (x && x.contains(':/') ? x.substr(1) : x))(
+                                            decodeURI(url.pathname || '').replaceAll('\\', '/')
+                                        ),
+                                        (_, buf) => {
+                                            res(buf);
+                                        }
+                                    );
+                                });
 
-                            return new Response(buf, {
-                                status: 200,
-                                statusText: 'ok'
-                            });
-                        } catch (e) {
-                            console.warn('mockFetch Failed, Error', { e });
-                            return new Response(null, { status: 404, statusText: 'file not found' });
+                                return new Response(buf, {
+                                    status: 200,
+                                    statusText: 'ok'
+                                });
+                            } catch (e) {
+                                console.warn('mockFetch Failed, Error', { e });
+                                return new Response(null, { status: 404, statusText: 'file not found' });
+                            }
+                        } else {
+                            // Mobile (iOS/Android): file: protocol not supported, return 404
+                            console.warn('file: protocol not supported on this platform', { url });
+                            return new Response(null, { status: 404, statusText: 'file: protocol not supported on mobile' });
                         }
                     }
                     if (res) {
@@ -353,10 +361,12 @@ export default (vault: Vault, plugin: AnnotatorPlugin) => {
                 }}
                 htmlPostProcessFunction={(html: string) => {
                     if ('pdf' in props) {
-                        html = html.replaceAll(SAMPLE_PDF_URL, proxy(props.pdf, props).href);
+                        // Use getProxiedUrl to convert vault: → actual resource URL (app://, blob:, etc.)
+                        // This ensures iOS WKWebView can load the file without needing patched fetch
+                        html = html.replaceAll(SAMPLE_PDF_URL, getProxiedUrl(proxy(props.pdf, props), props, vault));
                     }
                     if ('epub' in props) {
-                        html = html.replaceAll(SAMPLE_EPUB_URL, proxy(props.epub, props).href);
+                        html = html.replaceAll(SAMPLE_EPUB_URL, getProxiedUrl(proxy(props.epub, props), props, vault));
                     }
                     return html;
                 }}
@@ -377,16 +387,23 @@ export default (vault: Vault, plugin: AnnotatorPlugin) => {
                     await props.onIframePatch?.(iframe);
 
                     /* eslint-disable @typescript-eslint/no-explicit-any */
-                    (iframe.contentWindow as any).DarkReader = (
-                        await (iframe.contentWindow as any).eval(
-                            `import(\`${resourceUrls.get('dark-reader/darkreader.js')}\`)`
-                        )
-                    ).default;
-                    darkReaderReferences.add(new WeakRef((iframe.contentWindow as any).DarkReader));
-                    const garbageCollectedDarkReaders = [...darkReaderReferences].filter(r => !r.deref());
-                    garbageCollectedDarkReaders.forEach(r => darkReaderReferences.delete(r));
-                    (iframe.contentWindow as any).DarkReader.setFetchMethod(iframe.contentWindow.fetch);
-                    await props.onDarkReadersUpdated(darkReaderReferences);
+                    // iOS WKWebView restricts dynamic import() of blob: URLs; wrap with try-catch for graceful degradation
+                    try {
+                        (iframe.contentWindow as any).DarkReader = (
+                            await (iframe.contentWindow as any).eval(
+                                `import(\`${resourceUrls.get('dark-reader/darkreader.js')}\`)`
+                            )
+                        ).default;
+                        darkReaderReferences.add(new WeakRef((iframe.contentWindow as any).DarkReader));
+                        const garbageCollectedDarkReaders = [...darkReaderReferences].filter(r => !r.deref());
+                        garbageCollectedDarkReaders.forEach(r => darkReaderReferences.delete(r));
+                        (iframe.contentWindow as any).DarkReader.setFetchMethod(iframe.contentWindow.fetch);
+                        await props.onDarkReadersUpdated(darkReaderReferences);
+                    } catch (e) {
+                        // DarkReader failed to load (common on iOS WKWebView); use no-op fallback so the view still renders
+                        console.warn('Annotator: DarkReader failed to load (dark mode unavailable):', e);
+                        (iframe.contentWindow as any).DarkReader = { enable: () => {}, disable: () => {}, setFetchMethod: () => {} };
+                    }
                     /* eslint-enable @typescript-eslint/no-explicit-any */
                     iframe.contentDocument.documentElement.addEventListener('keydown', function (ev) {
                         if (ev.key == 'Shift') {
@@ -455,6 +472,9 @@ export default (vault: Vault, plugin: AnnotatorPlugin) => {
                 onload={async iframe => {
                     await props.onload(iframe);
                     let sidebarFrame;
+                    // Wait up to 60s for hypothesis sidebar to initialize.
+                    // On iOS WKWebView the sidebar may never appear; skip injection rather than blocking forever.
+                    const sidebarDeadline = Date.now() + 60000;
                     do {
                         await wait(100);
                         sidebarFrame =
@@ -466,11 +486,17 @@ export default (vault: Vault, plugin: AnnotatorPlugin) => {
                                 ?.querySelector('body > hypothesis-sidebar')
                                 ?.shadowRoot?.querySelector('div > iframe');
                     } while (
-                        sidebarFrame == null ||
+                        Date.now() < sidebarDeadline &&
+                        (sidebarFrame == null ||
                         !sidebarFrame?.contentDocument?.querySelector(
                             'body > hypothesis-app > div > div.TopBar > div > div.Menu > button > span > span.GroupList__menu-label'
-                        )
+                        ))
                     );
+
+                    if (!sidebarFrame?.contentDocument) {
+                        // Hypothesis sidebar did not initialize (common on iOS); skip CSS injection
+                        return;
+                    }
 
                     const style = sidebarFrame.contentDocument.createElement('style');
                     style.textContent = `
@@ -511,7 +537,13 @@ export default (vault: Vault, plugin: AnnotatorPlugin) => {
                 outerIframeProps={{
                     height: '100%',
                     width: '100%',
-                    sandbox: 'allow-same-origin allow-scripts allow-presentation allow-modals'
+                    // On mobile (iOS/Android), sandbox breaks iframe fetch patching inside WKWebView/WebView.
+                    // iOS treats nested iframes in sandboxed contexts as cross-origin even with allow-same-origin,
+                    // preventing react-offline-iframe from patching contentWindow.fetch on inner frames.
+                    // The OS sandbox provides equivalent security on mobile.
+                    ...(Platform.isMobile ? {} : {
+                        sandbox: 'allow-same-origin allow-scripts allow-presentation allow-modals'
+                    })
                 }}
             />
         );
