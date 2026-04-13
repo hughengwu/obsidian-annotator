@@ -4,23 +4,20 @@
     "inlineSourceMap": true,
     "inlineSources": true,
     "module": "ESNext",
-    "target": "es6",
+    "target": "ES2017",
     "allowJs": true,
     "noImplicitAny": false,
-    "moduleResolution": "node",
-    "esModuleInterop":true,
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
     "importHelpers": true,
     "noEmit": true,
     "allowSyntheticDefaultImports": true,
     "lib": [
-      "dom",
-      "es5",
-      "scripthost",
-      "es2015",
+      "DOM",
       "DOM.Iterable",
       "ESNext"
     ],
-    "jsx": "react",
+    "jsx": "react"
   },
   "include": [
     "src/**/*.ts",
