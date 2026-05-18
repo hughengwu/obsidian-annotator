@@ -19,6 +19,11 @@
     ],
     "jsx": "react"
   },
+  "ts-node": {
+    "compilerOptions": {
+      "moduleResolution": "node"
+    }
+  },
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx"

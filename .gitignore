@@ -11,8 +11,11 @@ yarn.lock
 # build
 main.js
 *.js.map
+.betterer.cache
 
 # obsidian
 data.json
 .vault_plugin_dir
 resources/cdn.hypothes.is/hypothesis/build
+CLAUDE.md
+.claude
